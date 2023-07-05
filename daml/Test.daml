@@ -1,0 +1,58 @@
+module Test where
+
+import Main
+import Daml.Script
+import DA.Time
+import DA.Date
+
+data TestParties = TestParties 
+    with
+        customer   : Party
+        bank    : Party
+        auditor : Party
+
+setupTestParties : Text -> Text -> Text -> Script TestParties
+setupTestParties customer bank auditor = script do 
+    customer <- allocatePartyWithHint "Bob" (PartyIdHint "Bob")
+    bank <- allocatePartyWithHint "Bank" (PartyIdHint "Bank")
+    auditor <- allocatePartyWithHint "Auditor" (PartyIdHint "Auditor")
+    
+    return $ TestParties with 
+        customer, bank, auditor
+
+setUpRequestAddBalance : Script()
+setUpRequestAddBalance = script do 
+
+    parties <- setupTestParties "bob" "bank" "auditor"
+    let bob = parties.customer
+        bank = parties.bank
+        auditor = parties.auditor
+
+    transactionAmountId <- submitMulti [bob,bank] [] do
+        createCmd TotalBalance
+            with
+                transactionId = "Transaction 1"
+                customer = bob
+                amount = 0.0
+                timestamp = time(date 20 Jun 10) 01 01 01
+                ..
+    -- Add Amount less than 0 should Fail 
+    submitMustFail bob do 
+        exerciseCmd transactionAmountId RequestAddBalance with addamount = -1.0, supplier="HSBC"
+    -- Happy Path      
+    submit bob do 
+        exerciseCmd transactionAmountId RequestAddBalance with addamount = 2000.0, supplier="HSBC"
+    -- Request made by bank should Fail 
+    submitMustFail bank do 
+        exerciseCmd transactionAmountId RequestAddBalance with addamount = 2000.0, supplier="HSBC"
+    -- Happy Senerio
+    balanceRequestCid <- submit bob do 
+        exerciseCmd transactionAmountId RequestAddBalance with addamount = 10.0, supplier = "HSBC"
+    -- Request made by customer(bob) should fail 
+    submitMustFail bob do 
+        exerciseCmd balanceRequestCid AcceptAddBalanceRequest
+    -- Request made by bank should succeed
+    submit bank do 
+        exerciseCmd balanceRequestCid AcceptAddBalanceRequest
+
+    return()

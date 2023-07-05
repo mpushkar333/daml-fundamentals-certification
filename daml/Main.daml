@@ -1,0 +1,153 @@
+module Main where
+
+import DA.Exception
+
+type AddBalanceRequestCid     = ContractId AddBalanceRequest
+type WithdrawBalanceRequestCid = ContractId WithdrawBalanceRequest
+type TotalBalanceCid      = ContractId TotalBalance
+type RejectedRequestCid     = ContractId RejectedRequest
+
+
+template TotalBalance
+    with
+        bank     : Party
+        customer    : Party
+        auditor  : Party
+        amount    : Decimal
+        timestamp   : Time
+        transactionId : Text
+    where
+        signatory customer, bank
+        observer  auditor
+
+        key (bank, transactionId) : (Party, Text)
+        maintainer key._1
+        
+        ensure amount >= 0.0
+    
+        nonconsuming choice RequestAddBalance : AddBalanceRequestCid
+            with 
+                addamount : Decimal
+                supplier    : Text
+            controller customer
+            do
+                assertMsg "amount to be added cannot be 0 or less " $ addamount >= 0.0
+                assertMsg "Supplier field cannot be empty" $ supplier /= ""
+                create AddBalanceRequest with  ..
+        
+        nonconsuming choice WithDrawBalanceAmount : WithdrawBalanceRequestCid
+            with
+                remamount : Decimal
+            controller customer
+            do
+                assertMsg "amount to be consumed/ removed cannot be 0 or less " $ remamount >= 0.0
+                create WithdrawBalanceRequest with 
+                    description = ""
+                    remamount
+                    ..
+
+        choice WithdrawBalance : TotalBalanceCid
+            with
+                remamount : Decimal
+            controller bank
+            do
+                assertMsg "Dear bank, the amount to be consumed/ removed cannot be 0 or less " $ remamount >= 0.0
+                try do
+                create this with 
+                    amount = amount - remamount
+                catch PreconditionFailed msg -> 
+                        assertFail ("Amount consumed("<> show remamount <>") cannot be higher than the set Balance : " <> show amount <> "")
+
+template AddBalanceRequest
+    with
+        bank     : Party
+        customer    : Party
+        auditor  : Party
+        supplier    : Text
+        transactionId : Text
+        addamount : Decimal
+        timestamp   : Time
+    where
+        signatory customer
+        observer auditor, bank
+
+        choice AcceptAddBalanceRequest : TotalBalanceCid
+            controller bank
+            do  
+                now <- getTime
+                
+                balanceCid <- findtransactionIdWithKey bank transactionId
+                balance    <- fetch balanceCid
+                let oldamount = balance.amount
+                
+                archive balanceCid
+                create balance with amount = oldamount + addamount
+            
+        choice RejectAddBalanceRequest : RejectedRequestCid
+            with
+                reason : Text
+            controller bank
+            do
+                now <- getTime
+
+                create RejectedRequest with
+                    opType    = "Add Balance - Rejection"
+                    timestamp = now
+                    ..
+        
+        choice RevokeAddBalanceRequest : ()
+            controller customer
+            do
+                return ()
+
+template WithdrawBalanceRequest
+    with
+        bank     : Party
+        customer    : Party
+        auditor  : Party
+        remamount : Decimal
+        description : Text
+        transactionId : Text
+        timestamp   : Time
+    where
+        signatory customer
+        observer  auditor, bank
+
+        choice AcceptBalanceConsumption : TotalBalanceCid
+            with balanceCid : TotalBalanceCid
+            controller bank
+            do  
+                exercise balanceCid WithdrawBalance with ..
+        
+        choice RejectWaterConsuption : RejectedRequestCid
+            with
+                reason : Text
+            controller bank
+            do
+                now <- getTime
+
+                create RejectedRequest with
+                    opType    = "Remove Balance - Rejection"
+                    timestamp = now
+                    ..
+        
+        choice RevokeWithdrawBalanceRequest : ()
+            controller customer
+            do
+                return ()
+    
+template RejectedRequest
+    with
+        bank    : Party
+        customer   : Party
+        auditor : Party
+        opType     : Text
+        reason     : Text
+        timestamp  : Time
+    where
+        signatory bank
+        observer customer, auditor
+
+
+findtransactionIdWithKey bank transactionId =
+    lookupByKey @TotalBalance (bank, transactionId) >>= optional (assertFail $ "transactionId "<> transactionId <> "not found") return
