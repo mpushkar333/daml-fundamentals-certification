@@ -4,9 +4,13 @@
 sdk-version: 2.6.4
 name: daml-fundamentals-certification
 source: daml
-init-script: Main:setup
+init-script: Test:setup
 version: 0.0.1
 dependencies:
   - daml-prim
   - daml-stdlib
   - daml-script
+exposed-modules:
+  - Main
+navigator-options:
+  - --feature-user-management=false
