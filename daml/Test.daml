@@ -56,3 +56,21 @@ setUpRequestAddBalance = script do
         exerciseCmd balanceRequestCid AcceptAddBalanceRequest
 
     return()
+
+setup : Script()
+setup = script do 
+    parties <-setupTestParties "bob" "bank" "auditor"
+    let bob = parties.customer
+        bank = parties.bank
+        auditor = parties.auditor
+
+    transactionAmountId <- submitMulti [bob, bank] [] do 
+        createCmd TotalBalance 
+            with 
+                transactionId = "Transaction 1"
+                customer = bob
+                amount = 100000.0
+                timestamp = time (date 10 Jun 10) 01 01 01
+                ..
+    
+    return ()
