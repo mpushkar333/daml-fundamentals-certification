@@ -7,7 +7,14 @@ type WithdrawBalanceRequestCid = ContractId WithdrawBalanceRequest
 type TotalBalanceCid      = ContractId TotalBalance
 type RejectedRequestCid     = ContractId RejectedRequest
 
-
+data Rejection = Rejection with 
+    bank    : Party
+    customer   : Party
+    auditor : Party
+    opType     : Text
+    reason     : Text
+    timestamp  : Time
+        deriving(Show,Eq,Ord)
 template TotalBalance
     with
         bank     : Party
@@ -90,10 +97,12 @@ template AddBalanceRequest
             do
                 now <- getTime
 
+                let rejectionRequest1 = Rejection with 
+                        opType    = "Add Balance - Rejection"
+                        timestamp = now
+                        ..
                 create RejectedRequest with
-                    opType    = "Add Balance - Rejection"
-                    timestamp = now
-                    ..
+                     rejectRequest = rejectionRequest1
         
         choice RevokeAddBalanceRequest : ()
             controller customer
@@ -126,10 +135,14 @@ template WithdrawBalanceRequest
             do
                 now <- getTime
 
-                create RejectedRequest with
-                    opType    = "Remove Balance - Rejection"
-                    timestamp = now
-                    ..
+                let rejectionRequest1 = Rejection with 
+                        opType    = "Add Balance - Rejection"
+                        timestamp = now
+                        ..
+                create RejectedRequest with 
+                    rejectRequest = rejectionRequest1
+         
+               
         
         choice RevokeWithdrawBalanceRequest : ()
             controller customer
@@ -138,15 +151,10 @@ template WithdrawBalanceRequest
     
 template RejectedRequest
     with
-        bank    : Party
-        customer   : Party
-        auditor : Party
-        opType     : Text
-        reason     : Text
-        timestamp  : Time
+        rejectRequest : Rejection
     where
-        signatory bank
-        observer customer, auditor
+        signatory rejectRequest.bank
+        observer rejectRequest.customer, rejectRequest.auditor
 
 
 findtransactionIdWithKey bank transactionId =
