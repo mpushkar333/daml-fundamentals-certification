@@ -128,7 +128,7 @@ template WithdrawBalanceRequest
             do  
                 exercise balanceCid WithdrawBalance with ..
         
-        choice RejectWaterConsuption : RejectedRequestCid
+        choice RejectBalanceConsumption : RejectedRequestCid
             with
                 reason : Text
             controller bank
