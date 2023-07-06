@@ -1,6 +1,6 @@
 **DAML Fundamentals Capstone Project** 
 
-** I.Project Overview **
+**I.Project Overview**
 The project's overall idea is to manage money in a particular facility, in this case
 a bank. The amount would be a single storage element hence only one account.
 Templates that are included in the project are - 
